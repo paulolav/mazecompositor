@@ -25,7 +25,7 @@
 #include "camera.h"
 #include "common.h"
 #include "map.h"
-#include "waylandsurface.h"
+#include "qwaylandsurface.h"
 
 #include <QGuiApplication>
 #include <QPainter>
@@ -44,19 +44,19 @@ uint SurfaceItem::m_normalUniform = 0;
 uint SurfaceItem::m_lightsUniform = 0;
 uint SurfaceItem::m_numLightsUniform = 0;
 
-SurfaceItem::SurfaceItem(WaylandSurface *surface)
-    : m_surface(surface)
-    , m_depthOffset(0)
+SurfaceItem::SurfaceItem(QWaylandSurface *surface)
+    : m_depthOffset(0)
     , m_opacity(0.55)
     , m_textureId(0)
     , m_height(maxHeight() * 0.99)
     , m_focus(false)
     , m_mipmap(true)
 {
+    setSurface(surface);
     m_time.start();
-    connect(surface, SIGNAL(damaged(const QRect &)), this, SLOT(surfaceDamaged(const QRect &)));
-    connect(surface, SIGNAL(sizeChanged()), this, SLOT(sizeChanged()));
-    m_dirty = QRect(QPoint(), surface->size());
+    connect(surface, &QWaylandSurface::damaged, this, &SurfaceItem::surfaceDamaged);
+    connect(surface, &QWaylandSurface::sizeChanged, this, &SurfaceItem::sizeChanged);
+    //m_dirty = QRect(QPoint(), surface->size());
 
     qDebug() << "surface size:" << surface->size();
     m_opacityAnimation = new QPropertyAnimation(this, "opacity");
@@ -169,7 +169,7 @@ qreal SurfaceItem::height() const
 
 void SurfaceItem::sizeChanged()
 {
-    setHeight(0.8 * m_surface->size().height() / qreal(QGuiApplication::primaryScreen()->size().height()));
+    setHeight(0.8 * surface()->size().height() / qreal(QGuiApplication::primaryScreen()->size().height()));
 }
 
 qreal SurfaceItem::maxHeight() const
@@ -179,7 +179,7 @@ qreal SurfaceItem::maxHeight() const
 
 QVector<QVector3D> SurfaceItem::vertices() const
 {
-    QSize size = m_surface->size();
+    QSize size = surface()->size();
 
     qreal w = (m_height * size.width()) / size.height();
     qreal h = m_height;
@@ -209,47 +209,32 @@ QVector<QVector3D> SurfaceItem::vertices() const
     return result;
 }
 
-uint SurfaceItem::textureId() const
+uint SurfaceItem::textureId()
 {
-    uint id = 0;
-    QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (m_surface->type() == WaylandSurface::Texture) {
-        id = m_surface->texture(ctx);
-    } else {
-        QImage image = m_surface->image();
-        if (m_textureSize != image.size()) {
-            if (!m_textureSize.isNull())
-                glDeleteTextures(1, &m_textureId);
-            const_cast<SurfaceItem *>(this)->m_textureId = generateTexture(image, true, false);
-            const_cast<SurfaceItem *>(this)->m_textureSize = image.size();
-        } else if (!m_dirty.isNull()) {
-            updateSubImage(m_textureId, image, m_dirty, true);
-        }
-        const_cast<SurfaceItem *>(this)->m_dirty = QRect();
-        id = m_textureId;
+    if (advance()) {
+        if (m_textureId)
+            glDeleteTextures(1, &m_textureId);
+
+        glGenTextures(1, &m_textureId);
+        glBindTexture(GL_TEXTURE_2D, m_textureId);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        currentBuffer().bindToTexture();
     }
 
-    if (m_mipmap && canUseMipmaps(m_textureSize)) {
-        glBindTexture(GL_TEXTURE_2D, id);
-        ctx->functions()->glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        const_cast<bool &>(m_mipmap) = false;
-    }
-
-    return id;
+    return m_textureId;
 }
 
-void SurfaceItem::surfaceDamaged(const QRect &rect)
+void SurfaceItem::surfaceDamaged(const QRegion &/*rect*/)
 {
-    m_dirty = m_dirty | rect;
+//    m_dirty = m_dirty | rect.boundingRect();
 }
 
 QSize SurfaceItem::size() const
 {
-    return m_surface->size();
+    return surface()->size();
 }
 
-void SurfaceItem::render(const Map &map, const Camera &camera) const
+void SurfaceItem::render(const Map &map, const Camera &camera)
 {
     int zone = map.zone(vertices().at(0));
 
@@ -261,7 +246,7 @@ void SurfaceItem::render(const Map &map, const Camera &camera) const
     m_program->bind();
     m_program->setUniformValue(m_matrixUniform, camera.viewProjectionMatrix());
 
-    QSize size = m_surface->size();
+    QSize size = surface()->size();
     m_program->setUniformValue(m_pixelSizeUniform, 5. / size.width(), 5. / size.height());
     m_program->setUniformValue(m_eyeUniform, camera.viewPos());
     m_program->setUniformValue(m_focusColorUniform, GLfloat(m_opacity));
@@ -284,7 +269,7 @@ void SurfaceItem::render(const Map &map, const Camera &camera) const
     qreal y1 = 0;
     qreal y2 = 1;
 
-    if (m_surface->isYInverted())
+    if (surface()->origin() == QWaylandSurface::OriginTopLeft)
         qSwap(y1, y2);
 
     QVector<QVector2D> texCoordBuffer;

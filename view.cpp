@@ -28,7 +28,7 @@
 #include "mesh.h"
 #include "surfaceitem.h"
 
-#include "waylandinput.h"
+#include "qwaylandinput.h"
 
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -78,12 +78,12 @@ QSurfaceFormat createFormat()
     return format;
 }
 
-QOpenGLWindow::QOpenGLWindow(const QRect &geometry)
+SROpenGLWindow::SROpenGLWindow(const QRect &geometry)
 {
     setSurfaceType(QWindow::OpenGLSurface);
     setGeometry(geometry);
     setFormat(createFormat());
-    setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    setFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
     create();
 
     m_context = new QOpenGLContext(this);
@@ -91,14 +91,13 @@ QOpenGLWindow::QOpenGLWindow(const QRect &geometry)
     m_context->create();
 }
 
-QOpenGLContext *QOpenGLWindow::context() const
+QOpenGLContext *SROpenGLWindow::context() const
 {
     return m_context;
 }
 
 View::View(const QRect &geometry)
-    : QOpenGLWindow(geometry)
-    , WaylandCompositor(this)
+    : SROpenGLWindow(geometry)
     , m_walkingVelocity(0)
     , m_strafingVelocity(0)
     , m_turningSpeed(0)
@@ -110,7 +109,7 @@ View::View(const QRect &geometry)
     , m_jumping(false)
     , m_jumpVelocity(0)
     , m_map()
-    , m_input(defaultInputDevice())
+    //////////, m_input(defaultInputDevice())
     , m_focus(0)
     , m_dragItem(0)
     , m_wireframe(false)
@@ -123,6 +122,7 @@ View::View(const QRect &geometry)
     , m_pressingInfo(false)
     , m_fullscreen(false)
     , m_entity(new Entity(this))
+    , m_compositor(0)
 {
     m_camera.setPos(QVector3D(2.5, 0, 2.5));
     m_camera.setYaw(0.1);
@@ -400,15 +400,27 @@ View::View(const QRect &geometry)
     m_animationTimer->setSingleShot(true);
     m_animationTimer->start();
     connect(m_animationTimer, SIGNAL(timeout()), this, SLOT(render()));
+
+
+
+    m_compositor = new Compositor(this);
+    m_compositor->create();
+    m_input = m_compositor->defaultInputDevice();
 }
 
 View::~View()
 {
 }
 
+void View::triggerRender()
+{
+    if (m_animationTimer->isSingleShot())
+        m_animationTimer->start();
+}
+
 void View::surfaceDestroyed(QObject *object)
 {
-    WaylandSurface *surface = static_cast<WaylandSurface *>(object);
+    QWaylandSurface *surface = static_cast<QWaylandSurface *>(object);
 
     SurfaceHash::iterator it = m_surfaces.find(surface);
     if (it == m_surfaces.end())
@@ -430,11 +442,12 @@ void View::surfaceDestroyed(QObject *object)
     m_animationTimer->start();
 }
 
-void View::surfaceDamaged(const QRect &)
+void View::surfaceDamaged(const QRegion &)
 {
-    WaylandSurface *surface = qobject_cast<WaylandSurface *>(sender());
-    if (!m_surfaces.contains(surface)) {
+    QWaylandSurface *surface = qobject_cast<QWaylandSurface *>(sender());
+    if (!m_surfaces.contains(surface) && !surface->isCursorSurface()) {
         SurfaceItem *item = new SurfaceItem(surface);
+        item->setOutput(m_compositor->outputFor(this));
         m_surfaces.insert(surface, item);
 
         connect(item, SIGNAL(opacityChanged()), m_animationTimer, SLOT(start()));
@@ -445,10 +458,10 @@ void View::surfaceDamaged(const QRect &)
     m_animationTimer->start();
 }
 
-void View::surfaceCreated(WaylandSurface *surface)
+void View::surfaceCreated(QWaylandSurface *surface)
 {
     connect(surface, SIGNAL(destroyed(QObject *)), this, SLOT(surfaceDestroyed(QObject *)));
-    connect(surface, SIGNAL(damaged(const QRect &)), this, SLOT(surfaceDamaged(const QRect &)));
+    connect(surface, SIGNAL(damaged(const QRegion &)), this, SLOT(surfaceDamaged(const QRegion &)));
 }
 
 bool View::tryMove(QVector3D &pos, const QVector3D &delta) const
@@ -569,8 +582,9 @@ void View::move(Camera &camera, const QVector3D &pos)
 
 void View::render()
 {
-    m_context->makeCurrent(this);
+    m_compositor->startRender();
 
+    m_context->makeCurrent(this);
     QSizeF viewport(width(), height());
 
     glEnable(GL_SCISSOR_TEST);
@@ -587,8 +601,8 @@ void View::render()
         drawTexture(QRectF(0, 0, width(), height()), viewport, m_focus->textureId(), 1.0);
 
         m_context->swapBuffers(this);
-        WaylandCompositor::frameFinished(m_focus->surface());
-
+        //###### QWaylandCompositor::frameFinished(m_focus->surface());
+        m_compositor->endRender();
         frameRendered();
 
         return;
@@ -715,8 +729,7 @@ void View::render()
     glDisable(GL_BLEND);
 
     m_context->swapBuffers(this);
-    WaylandCompositor::frameFinished();
-
+    m_compositor->endRender();
     frameRendered();
 }
 
@@ -1123,7 +1136,7 @@ void View::handleTouchBegin(QTouchEvent *event)
     QPoint primaryPos = event->touchPoints().at(0).pos().toPoint();
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        m_input->sendMousePressEvent(Qt::LeftButton, relative);
+        //####m_input->sendMousePressEvent(Qt::LeftButton, relative);
         return;
     }
 
@@ -1154,7 +1167,7 @@ void View::handleTouchBegin(QTouchEvent *event)
         oldFocus->setFocus(false);
 
     if (m_focus) {
-        QRect rect = QRect(m_focus->surface()->pos().toPoint(), m_focus->surface()->size());
+        QRect rect = QRect(/* ### m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->size());
 
         QVector2D size = QVector2D(rect.bottomRight());
         QVector2D local = QVector2D(result.u, result.v) * size;
@@ -1176,7 +1189,7 @@ void View::handleTouchBegin(QTouchEvent *event)
         } else {
             m_mousePos = local.toPoint();
             startFocus();
-            m_input->sendMousePressEvent(Qt::LeftButton, m_mousePos);
+            //##### m_input->sendMousePressEvent(Qt::LeftButton, m_mousePos);
         }
     } else if (!m_pressingInfo) {
         if (m_animationTimer->isSingleShot()) {
@@ -1194,7 +1207,7 @@ void View::startFocus()
 {
     m_focusTimer->stop();
     m_input->setKeyboardFocus(m_focus->surface());
-    m_input->setMouseFocus(m_focus->surface(), QPoint());
+   //#### m_input->setMouseFocus(m_focus->surface(), QPoint());
 
     m_focus->setFocus(true);
 
@@ -1310,7 +1323,7 @@ void View::handleTouchEnd(QTouchEvent *event)
 
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        m_input->sendMouseReleaseEvent(Qt::LeftButton, relative);
+        //### m_input->sendMouseReleaseEvent(Qt::LeftButton, relative);
 
         if (QRect(0, 0, 2, 2).contains(primaryPos)) {
             m_fullscreen = false;
@@ -1352,7 +1365,7 @@ void View::handleTouchEnd(QTouchEvent *event)
     TraceResult result = trace(primaryPos, TraceKeepFocus);
     Q_ASSERT(result.item == m_focus);
 
-    QRect rect = QRect(m_focus->surface()->pos().toPoint(), m_focus->surface()->size());
+    QRect rect = QRect(QPoint() /*m_focus->surface()->pos().toPoint()*/, m_focus->surface()->size());
     QVector2D size = QVector2D(rect.bottomRight());
     QVector2D local = QVector2D(result.u, result.v) * size;
 
@@ -1372,7 +1385,7 @@ void View::handleTouchEnd(QTouchEvent *event)
         m_animationTimer->setSingleShot(true);
         m_animationTimer->start();
     } else {
-        m_input->sendMouseReleaseEvent(Qt::LeftButton, m_mousePos);
+        //###  m_input->sendMouseReleaseEvent(Qt::LeftButton, m_mousePos);
     }
 }
 
@@ -1385,7 +1398,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
 
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        m_input->sendMouseMoveEvent(relative);
+        // ### m_input->sendMouseMoveEvent(relative);
         return;
     }
 
@@ -1405,7 +1418,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
     TraceResult result = trace(primaryPos, TraceKeepFocus);
     Q_ASSERT(result.item == m_focus);
 
-    QRect rect = QRect(m_focus->surface()->pos().toPoint(), m_focus->surface()->size());
+    QRect rect = QRect(/*m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->size());
     QVector2D size = QVector2D(rect.bottomRight());
     QVector2D local = QVector2D(result.u, result.v) * size;
 
@@ -1414,7 +1427,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
         return;
     }
 
-    m_input->sendMouseMoveEvent(local.toPoint());
+   //### m_input->sendMouseMoveEvent(local.toPoint());
 }
 
 void View::keyPressEvent(QKeyEvent *event)
@@ -1573,3 +1586,148 @@ View::TraceResult View::trace(const QPointF &pos, TraceFlags flags)
 
     return result;
 }
+
+Compositor::Compositor(View *window)
+    : QWaylandCompositor()
+    , m_window(window)
+    //, m_shell(new QWaylandShell(this))
+{
+    //connect(m_shell, &QWaylandShell::createShellSurface, this, &Compositor::onCreateShellSurface);
+}
+
+Compositor::~Compositor()
+{
+}
+
+void Compositor::create()
+{
+    new QWaylandOutput(this, m_window);
+    QWaylandCompositor::create();
+
+    connect(this, &QWaylandCompositor::surfaceCreated, this, &Compositor::onSurfaceCreated);
+    //connect(defaultInputDevice(), &QWaylandInputDevice::cursorSurfaceRequest, this, &Compositor::adjustCursorSurface);
+    //connect(defaultInputDevice()->drag(), &QWaylandDrag::dragStarted, this, &Compositor::startDrag);
+}
+
+void Compositor::onSurfaceCreated(QWaylandSurface *surface)
+{
+    m_window->surfaceCreated(surface);
+}
+
+
+void Compositor::startRender()
+{
+    QWaylandOutput *out = defaultOutput();
+    if (out)
+        out->frameStarted();
+}
+
+void Compositor::endRender()
+{
+    QWaylandOutput *out = defaultOutput();
+    if (out)
+        out->sendFrameCallbacks();
+}
+
+#if 0
+void Compositor::triggerRender()
+{
+    m_window->triggerRender();
+}
+
+void Compositor::surfaceMappedChanged()
+{
+    QWaylandSurface *surface = qobject_cast<QWaylandSurface *>(sender());
+    if (surface->isMapped()) {
+        if (!surface->isCursorSurface())
+            defaultInputDevice()->setKeyboardFocus(surface);
+    } else if (popupActive()) {
+        for (int i = 0; i < m_popupViews.count(); i++) {
+            if (m_popupViews.at(i)->surface() == surface) {
+                m_popupViews.removeAt(i);
+                break;
+            }
+        }
+    }
+    triggerRender();
+}
+
+void Compositor::surfaceDestroyed()
+{
+    triggerRender();
+}
+
+void Compositor::viewSurfaceDestroyed()
+{
+#if 0
+    WindowSurfaceView *view = qobject_cast<WindowSurfaceView*>(sender());
+    m_views.removeAll(view);
+    delete view;
+#endif
+}
+
+
+SurfaceView * Compositor::findView(const QWaylandSurface *s) const
+{
+//    Q_FOREACH (SurfaceView* view, m_views) {
+//        if (view->surface() == s)
+//            return view;
+//    }
+    return Q_NULLPTR;
+}
+void Compositor::onCreateShellSurface(QWaylandSurface *s, QWaylandClient *client, uint id)
+{
+    QWaylandSurface *surface = s;
+
+    //QWaylandShellSurface *shellSurface = new QWaylandShellSurface(m_shell, surface, client, id);
+    //connect(shellSurface, &QWaylandShellSurface::startMove, this, &Compositor::onStartMove);
+    //connect(shellSurface, &QWaylandShellSurface::startResize, this, &Compositor::onStartResize);
+    //connect(shellSurface, &QWaylandShellSurface::setTransient, this, &Compositor::onSetTransient);
+    //connect(shellSurface, &QWaylandShellSurface::setPopup, this, &Compositor::onSetPopup);
+    SurfaceView *view = findView(s);
+    //////// Q_ASSERT(view);
+    ///////// view->m_shellSurface = shellSurface;
+}
+
+void Compositor::onSetPopup(QWaylandInputDevice *inputDevice, QWaylandSurface *parent, const QPoint &relativeToParent)
+{
+    Q_UNUSED(inputDevice);
+    QWaylandShellSurface *surface = qobject_cast<QWaylandShellSurface*>(sender());
+    SurfaceView *view = findView(surface->surface());
+    if (view) {
+        m_popupViews << view;
+        /////raise(view);
+        SurfaceView *parentView = findView(parent);
+        if (parentView)
+            view->setPosition(parentView->position() + relativeToParent);
+    }
+}
+
+void Compositor::handleMouseEvent(QWaylandView *target, QMouseEvent *me)
+{
+    if (target && popupActive() && me->type() == QEvent::MouseButtonPress
+        && target->surface()->client() != m_popupViews.first()->surface()->client()) {
+        closePopups();
+    }
+    QWaylandInputDevice *input = defaultInputDevice();
+    switch (me->type()) {
+        case QEvent::MouseButtonPress:
+            input->sendMousePressEvent(me->button());
+            break;
+    case QEvent::MouseButtonRelease:
+         input->sendMouseReleaseEvent(me->button());
+         break;
+    case QEvent::MouseMove:
+        input->sendMouseMoveEvent(target, me->localPos(), me->globalPos());
+    default:
+        break;
+    }
+}
+
+void Compositor::closePopups()
+{
+    Q_FOREACH (SurfaceView *view, m_popupViews)
+     /////   view->m_shellSurface->sendPopupDone();
+    m_popupViews.clear();
+}
+#endif

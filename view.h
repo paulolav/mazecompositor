@@ -36,26 +36,55 @@
 
 #include "camera.h"
 #include "map.h"
+#include <QtWaylandCompositor/QWaylandCompositor>
+#include <QtWaylandCompositor/QWaylandSurface>
+#include <QtWaylandCompositor/QWaylandView>
 
-#include "waylandcompositor.h"
-#include "waylandsurface.h"
+#include <QtWaylandCompositor/QWaylandShellSurface>
 
+class View;
+class SurfaceItem;
 class Entity;
 class Light;
 class SurfaceItem;
 class QOpenGLFramebufferObject;
 
-class QOpenGLWindow : public QWindow
+class QWaylandShell;
+
+class SROpenGLWindow : public QWindow
 {
 public:
-    QOpenGLWindow(const QRect &geometry);
+    SROpenGLWindow(const QRect &geometry);
     QOpenGLContext *context() const;
 
 private:
     QOpenGLContext *m_context;
 };
 
-class View : public QOpenGLWindow, public WaylandCompositor
+class Compositor : public QWaylandCompositor
+{
+    Q_OBJECT
+public:
+    Compositor(View *window);
+    ~Compositor();
+    void create() Q_DECL_OVERRIDE;
+
+    void startRender();
+    void endRender();
+
+    //bool popupActive() const { return !m_popupViews.isEmpty(); }
+
+private slots:
+    void onSurfaceCreated(QWaylandSurface *surface);
+
+private:
+    View *m_window;
+    //
+    QList<SurfaceItem*> m_popupViews;
+};
+
+
+class View : public SROpenGLWindow
 {
     Q_OBJECT
 public:
@@ -63,15 +92,16 @@ public:
     ~View();
 
 public slots:
+    void triggerRender();
     void render();
     void onLongPress();
 
 private slots:
     void surfaceDestroyed(QObject *surface);
-    void surfaceDamaged(const QRect &rect);
+    void surfaceDamaged(const QRegion &rect);
 
 protected:
-    void surfaceCreated(WaylandSurface *surface);
+    void surfaceCreated(QWaylandSurface *surface);
 
 private:
     void resizeEvent(QResizeEvent *event);
@@ -174,14 +204,14 @@ private:
 
     QTime m_time;
 
-    typedef QHash<WaylandSurface *, SurfaceItem *> SurfaceHash;
+    typedef QHash<QWaylandSurface *, SurfaceItem *> SurfaceHash;
     SurfaceHash m_surfaces;
 
     QList<SurfaceItem *> m_mappedSurfaces;
     QList<SurfaceItem *> m_dockedSurfaces;
 
     Map m_map;
-    WaylandInputDevice *m_input;
+    QWaylandInputDevice *m_input;
     SurfaceItem *m_focus;
     QVector2D m_resizeGrip;
     QPolygonF m_portalPoly;
@@ -212,6 +242,9 @@ private:
     QTimer *m_fullscreenTimer;
     QTimer *m_animationTimer;
     Entity *m_entity;
+
+    Compositor *m_compositor;
+    friend class Compositor;
 };
 
 #endif

@@ -30,27 +30,23 @@
 #include <QVector3D>
 
 #include <QPropertyAnimation>
+#include <QWaylandView>
 
 class Camera;
 class Map;
-class WaylandSurface;
+class QWaylandSurface;
 
 class QOpenGLShaderProgram;
 
-class SurfaceItem : public QObject
+class SurfaceItem : public QWaylandView
 {
     Q_OBJECT
     Q_PROPERTY(qreal opacity READ opacity WRITE setOpacity NOTIFY opacityChanged)
 public:
-    SurfaceItem(WaylandSurface *surface);
+    SurfaceItem(QWaylandSurface *surface);
     ~SurfaceItem();
 
     QVector<QVector3D> vertices() const;
-
-    WaylandSurface *surface() const
-    {
-        return m_surface;
-    }
 
     void setPos(const QVector3D &pos) { m_pos = pos; }
     void setNormal(const QVector3D &normal) { m_normal = normal; }
@@ -66,24 +62,24 @@ public:
 
     void setMipmap(bool mipmap) { m_mipmap = mipmap; }
 
-    uint textureId() const;
+    uint textureId();
     QSize size() const;
 
-    void render(const Map &map, const Camera &camera) const;
+    void render(const Map &map, const Camera &camera);
     void setOpacity(qreal op);
     qreal opacity() const { return m_opacity; }
 
     static void initialize(const Map &map, QObject *parent);
 
 private slots:
-    void surfaceDamaged(const QRect &rect);
+    void surfaceDamaged(const QRegion &rect);
     void sizeChanged();
 
 signals:
     void opacityChanged();
 
 private:
-    WaylandSurface *m_surface;
+    QPoint m_position;
 
     QVector3D m_pos;
     QVector3D m_normal;
