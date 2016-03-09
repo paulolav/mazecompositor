@@ -79,7 +79,6 @@ private slots:
 
 private:
     View *m_window;
-    //
     QList<SurfaceItem*> m_popupViews;
 };
 

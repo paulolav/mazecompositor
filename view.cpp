@@ -109,7 +109,7 @@ View::View(const QRect &geometry)
     , m_jumping(false)
     , m_jumpVelocity(0)
     , m_map()
-    //////////, m_input(defaultInputDevice())
+    , m_input(0)
     , m_focus(0)
     , m_dragItem(0)
     , m_wireframe(false)
@@ -401,8 +401,6 @@ View::View(const QRect &geometry)
     m_animationTimer->start();
     connect(m_animationTimer, SIGNAL(timeout()), this, SLOT(render()));
 
-
-
     m_compositor = new Compositor(this);
     m_compositor->create();
     m_input = m_compositor->defaultInputDevice();
@@ -601,7 +599,6 @@ void View::render()
         drawTexture(QRectF(0, 0, width(), height()), viewport, m_focus->textureId(), 1.0);
 
         m_context->swapBuffers(this);
-        //###### QWaylandCompositor::frameFinished(m_focus->surface());
         m_compositor->endRender();
         frameRendered();
 
@@ -1631,6 +1628,9 @@ void Compositor::endRender()
 }
 
 #if 0
+
+// TODO: add popup and shell support
+
 void Compositor::triggerRender()
 {
     m_window->triggerRender();
