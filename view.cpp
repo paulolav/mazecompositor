@@ -1136,7 +1136,8 @@ void View::handleTouchBegin(QTouchEvent *event)
     QPoint primaryPos = event->touchPoints().at(0).pos().toPoint();
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        //####m_input->sendMousePressEvent(Qt::LeftButton, relative);
+        m_input->sendMouseMoveEvent(m_focus, relative, primaryPos);
+        m_input->sendMousePressEvent(Qt::LeftButton);
         return;
     }
 
@@ -1189,7 +1190,9 @@ void View::handleTouchBegin(QTouchEvent *event)
         } else {
             m_mousePos = local.toPoint();
             startFocus();
-            //##### m_input->sendMousePressEvent(Qt::LeftButton, m_mousePos);
+            m_input->sendMouseMoveEvent(m_focus, m_mousePos, primaryPos);
+            m_input->sendMousePressEvent(Qt::LeftButton);
+
         }
     } else if (!m_pressingInfo) {
         if (m_animationTimer->isSingleShot()) {
@@ -1207,7 +1210,6 @@ void View::startFocus()
 {
     m_focusTimer->stop();
     m_input->setKeyboardFocus(m_focus->surface());
-   //#### m_input->setMouseFocus(m_focus->surface(), QPoint());
 
     m_focus->setFocus(true);
 
@@ -1323,8 +1325,7 @@ void View::handleTouchEnd(QTouchEvent *event)
 
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        //### m_input->sendMouseReleaseEvent(Qt::LeftButton, relative);
-
+        m_input->sendMouseReleaseEvent(Qt::LeftButton);
         if (QRect(0, 0, 2, 2).contains(primaryPos)) {
             m_fullscreen = false;
             m_animationTimer->start();
@@ -1385,7 +1386,7 @@ void View::handleTouchEnd(QTouchEvent *event)
         m_animationTimer->setSingleShot(true);
         m_animationTimer->start();
     } else {
-        //###  m_input->sendMouseReleaseEvent(Qt::LeftButton, m_mousePos);
+        m_input->sendMouseReleaseEvent(Qt::LeftButton);
     }
 }
 
@@ -1398,7 +1399,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
 
     if (m_fullscreen) {
         QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
-        // ### m_input->sendMouseMoveEvent(relative);
+        m_input->sendMouseMoveEvent(m_focus, relative, primaryPos);
         return;
     }
 
@@ -1427,7 +1428,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
         return;
     }
 
-   //### m_input->sendMouseMoveEvent(local.toPoint());
+    m_input->sendMouseMoveEvent(m_focus, local.toPoint(), primaryPos);
 }
 
 void View::keyPressEvent(QKeyEvent *event)
