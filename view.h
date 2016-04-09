@@ -40,7 +40,7 @@
 #include <QtWaylandCompositor/QWaylandSurface>
 #include <QtWaylandCompositor/QWaylandView>
 
-#include <QtWaylandCompositor/QWaylandShellSurface>
+#include <QtWaylandCompositor/QWaylandWlShellSurface>
 
 class View;
 class SurfaceItem;
@@ -49,7 +49,7 @@ class Light;
 class SurfaceItem;
 class QOpenGLFramebufferObject;
 
-class QWaylandShell;
+class QWaylandWlShell;
 
 class SROpenGLWindow : public QWindow
 {

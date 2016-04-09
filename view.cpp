@@ -1591,9 +1591,9 @@ View::TraceResult View::trace(const QPointF &pos, TraceFlags flags)
 Compositor::Compositor(View *window)
     : QWaylandCompositor()
     , m_window(window)
-    //, m_shell(new QWaylandShell(this))
+    //, m_shell(new QWaylandWlShell(this))
 {
-    //connect(m_shell, &QWaylandShell::createShellSurface, this, &Compositor::onCreateShellSurface);
+    //connect(m_shell, &QWaylandWlShell::createShellSurface, this, &Compositor::onCreateShellSurface);
 }
 
 Compositor::~Compositor()
@@ -1680,11 +1680,11 @@ void Compositor::onCreateShellSurface(QWaylandSurface *s, QWaylandClient *client
 {
     QWaylandSurface *surface = s;
 
-    //QWaylandShellSurface *shellSurface = new QWaylandShellSurface(m_shell, surface, client, id);
-    //connect(shellSurface, &QWaylandShellSurface::startMove, this, &Compositor::onStartMove);
-    //connect(shellSurface, &QWaylandShellSurface::startResize, this, &Compositor::onStartResize);
-    //connect(shellSurface, &QWaylandShellSurface::setTransient, this, &Compositor::onSetTransient);
-    //connect(shellSurface, &QWaylandShellSurface::setPopup, this, &Compositor::onSetPopup);
+    //QWaylandWlShellSurface *shellSurface = new QWaylandWlShellSurface(m_shell, surface, client, id);
+    //connect(shellSurface, &QWaylandWlShellSurface::startMove, this, &Compositor::onStartMove);
+    //connect(shellSurface, &QWaylandWlShellSurface::startResize, this, &Compositor::onStartResize);
+    //connect(shellSurface, &QWaylandWlShellSurface::setTransient, this, &Compositor::onSetTransient);
+    //connect(shellSurface, &QWaylandWlShellSurface::setPopup, this, &Compositor::onSetPopup);
     SurfaceView *view = findView(s);
     //////// Q_ASSERT(view);
     ///////// view->m_shellSurface = shellSurface;
@@ -1693,7 +1693,7 @@ void Compositor::onCreateShellSurface(QWaylandSurface *s, QWaylandClient *client
 void Compositor::onSetPopup(QWaylandInputDevice *inputDevice, QWaylandSurface *parent, const QPoint &relativeToParent)
 {
     Q_UNUSED(inputDevice);
-    QWaylandShellSurface *surface = qobject_cast<QWaylandShellSurface*>(sender());
+    QWaylandWlShellSurface *surface = qobject_cast<QWaylandWlShellSurface*>(sender());
     SurfaceView *view = findView(surface->surface());
     if (view) {
         m_popupViews << view;
