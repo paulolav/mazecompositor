@@ -210,7 +210,7 @@ private:
     QList<SurfaceItem *> m_dockedSurfaces;
 
     Map m_map;
-    QWaylandInputDevice *m_input;
+    QWaylandSeat *m_input;
     SurfaceItem *m_focus;
     QVector2D m_resizeGrip;
     QPolygonF m_portalPoly;
