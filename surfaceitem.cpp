@@ -211,17 +211,18 @@ QVector<QVector3D> SurfaceItem::vertices() const
 
 uint SurfaceItem::textureId()
 {
-    if (advance()) {
-        if (m_textureId)
-            glDeleteTextures(1, &m_textureId);
+//    if (advance()) {
+//        if (m_textureId)
+//            glDeleteTextures(1, &m_textureId);
 
-        glGenTextures(1, &m_textureId);
-        glBindTexture(GL_TEXTURE_2D, m_textureId);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        currentBuffer().bindToTexture();
-    }
-
-    return m_textureId;
+//        glGenTextures(1, &m_textureId);
+//        glBindTexture(GL_TEXTURE_2D, m_textureId);
+//        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//        currentBuffer().bindToTexture();
+//    }
+    advance();
+    auto texture = currentBuffer().toOpenGLTexture();
+    return texture ? texture->textureId() : 0;
 }
 
 void SurfaceItem::surfaceDamaged(const QRegion &/*rect*/)
