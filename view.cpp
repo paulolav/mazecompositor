@@ -28,17 +28,21 @@
 #include "mesh.h"
 #include "surfaceitem.h"
 
-#include "qwaylandinput.h"
+#include "qwaylandseat.h"
 
+
+#include <QPainterPath>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QLineF>
 #include <QMatrix4x4>
+#include <QTransform>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLPaintDevice>
 #include <QPainter>
 #include <QTimer>
+#include <QTime>
 
 #include <qopengl.h>
 #include <qmath.h>
@@ -378,7 +382,7 @@ View::View(const QRect &geometry)
     portalPath.lineTo(0.25, 0);
     portalPath.lineTo(-0.25, 0);
 
-    QMatrix matrix;
+    QTransform matrix;
     matrix.scale(300, 300);
     m_portalPoly = matrix.inverted().map(portalPath.toFillPolygon(matrix));
     m_portalRect = m_portalPoly.boundingRect();
@@ -403,7 +407,7 @@ View::View(const QRect &geometry)
 
     m_compositor = new Compositor(this);
     m_compositor->create();
-    m_input = m_compositor->defaultInputDevice();
+    m_input = m_compositor->defaultSeat();
 }
 
 View::~View()
@@ -791,7 +795,7 @@ void View::render(const Camera &camera, const QRect &currentBounds, int zone, in
     m_program->setUniformValue(m_matrixUniform, camera.viewProjectionMatrix());
     m_program->setUniformValue(m_eyeUniform, camera.viewPos());
     m_program->setUniformValueArray(m_lightsUniform, m_map.lights(zone).constData(), m_map.lights(zone).size());
-    m_program->setUniformValue(m_numLightsUniform, m_map.lights(zone).size());
+    m_program->setUniformValue(m_numLightsUniform, uint(m_map.lights(zone).size()));
 
     glActiveTexture(GL_TEXTURE0 + m_textureUniform);
     glBindTexture(GL_TEXTURE_2D, m_textureId);
@@ -1037,7 +1041,7 @@ void View::resizeTo(const QVector2D &local)
 {
     Q_ASSERT(m_focus);
 
-    QSize sz = m_focus->surface()->size();
+    QSize sz = m_focus->surface()->destinationSize();
 
     QVector2D size = QVector2D(sz.width(), sz.height());
     QVector2D center = size / 2;
@@ -1132,7 +1136,7 @@ void View::handleTouchBegin(QTouchEvent *event)
 {
     QPoint primaryPos = event->touchPoints().at(0).pos().toPoint();
     if (m_fullscreen) {
-        QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
+        QPointF relative(primaryPos.x() * m_focus->surface()->destinationSize().width() / qreal(width()), primaryPos.y() * m_focus->surface()->destinationSize().height() / qreal(height()));
         m_input->sendMouseMoveEvent(m_focus, relative, primaryPos);
         m_input->sendMousePressEvent(Qt::LeftButton);
         return;
@@ -1165,7 +1169,7 @@ void View::handleTouchBegin(QTouchEvent *event)
         oldFocus->setFocus(false);
 
     if (m_focus) {
-        QRect rect = QRect(/* ### m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->size());
+        QRect rect = QRect(/* ### m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->destinationSize());
 
         QVector2D size = QVector2D(rect.bottomRight());
         QVector2D local = QVector2D(result.u, result.v) * size;
@@ -1239,7 +1243,7 @@ void View::handleCamera(QTouchEvent *event)
         int id = points.at(i).id();
 
         QPoint pos = points.at(i).pos().toPoint();
-        Qt::TouchPointState state = points.at(i).state();
+        auto state = points.at(i).state();
         if (state == Qt::TouchPointPressed) {
             if (m_touchMoveId < 0 && (pos.x() < width() / 2 || m_touchLookId >= 0)) {
                 m_touchMoveId = id;
@@ -1321,7 +1325,7 @@ void View::handleTouchEnd(QTouchEvent *event)
     QPoint primaryPos = event->touchPoints().at(0).pos().toPoint();
 
     if (m_fullscreen) {
-        QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
+        QPointF relative(primaryPos.x() * m_focus->surface()->destinationSize().width() / qreal(width()), primaryPos.y() * m_focus->surface()->destinationSize().height() / qreal(height()));
         m_input->sendMouseReleaseEvent(Qt::LeftButton);
         if (QRect(0, 0, 2, 2).contains(primaryPos)) {
             m_fullscreen = false;
@@ -1363,7 +1367,7 @@ void View::handleTouchEnd(QTouchEvent *event)
     TraceResult result = trace(primaryPos, TraceKeepFocus);
     Q_ASSERT(result.item == m_focus);
 
-    QRect rect = QRect(QPoint() /*m_focus->surface()->pos().toPoint()*/, m_focus->surface()->size());
+    QRect rect = QRect(QPoint() /*m_focus->surface()->pos().toPoint()*/, m_focus->surface()->destinationSize());
     QVector2D size = QVector2D(rect.bottomRight());
     QVector2D local = QVector2D(result.u, result.v) * size;
 
@@ -1395,7 +1399,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
     QPoint primaryPos = event->touchPoints().at(0).pos().toPoint();
 
     if (m_fullscreen) {
-        QPointF relative(primaryPos.x() * m_focus->surface()->size().width() / qreal(width()), primaryPos.y() * m_focus->surface()->size().height() / qreal(height()));
+        QPointF relative(primaryPos.x() * m_focus->surface()->destinationSize().width() / qreal(width()), primaryPos.y() * m_focus->surface()->destinationSize().height() / qreal(height()));
         m_input->sendMouseMoveEvent(m_focus, relative, primaryPos);
         return;
     }
@@ -1416,7 +1420,7 @@ void View::handleTouchUpdate(QTouchEvent *event)
     TraceResult result = trace(primaryPos, TraceKeepFocus);
     Q_ASSERT(result.item == m_focus);
 
-    QRect rect = QRect(/*m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->size());
+    QRect rect = QRect(/*m_focus->surface()->pos().toPoint()*/ QPoint(), m_focus->surface()->destinationSize());
     QVector2D size = QVector2D(rect.bottomRight());
     QVector2D local = QVector2D(result.u, result.v) * size;
 
@@ -1641,7 +1645,7 @@ void Compositor::surfaceMappedChanged()
     QWaylandSurface *surface = qobject_cast<QWaylandSurface *>(sender());
     if (surface->isMapped()) {
         if (!surface->isCursorSurface())
-            defaultInputDevice()->setKeyboardFocus(surface);
+            defaultSeat()->setKeyboardFocus(surface);
     } else if (popupActive()) {
         for (int i = 0; i < m_popupViews.count(); i++) {
             if (m_popupViews.at(i)->surface() == surface) {
@@ -1690,7 +1694,7 @@ void Compositor::onCreateShellSurface(QWaylandSurface *s, QWaylandClient *client
     ///////// view->m_shellSurface = shellSurface;
 }
 
-void Compositor::onSetPopup(QWaylandInputDevice *inputDevice, QWaylandSurface *parent, const QPoint &relativeToParent)
+void Compositor::onSetPopup(QWaylandSeat *inputDevice, QWaylandSurface *parent, const QPoint &relativeToParent)
 {
     Q_UNUSED(inputDevice);
     QWaylandWlShellSurface *surface = qobject_cast<QWaylandWlShellSurface*>(sender());
@@ -1710,7 +1714,7 @@ void Compositor::handleMouseEvent(QWaylandView *target, QMouseEvent *me)
         && target->surface()->client() != m_popupViews.first()->surface()->client()) {
         closePopups();
     }
-    QWaylandInputDevice *input = defaultInputDevice();
+    QWaylandSeat *input = defaultSeat();
     switch (me->type()) {
         case QEvent::MouseButtonPress:
             input->sendMousePressEvent(me->button());

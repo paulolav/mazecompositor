@@ -24,7 +24,7 @@
 #define MAP_H
 
 #include <QByteArray>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QVector>
 #include <QVector3D>
 
@@ -164,7 +164,7 @@ private:
     int m_dimX;
     int m_dimY;
 
-    QTime m_time;
+    QElapsedTimer m_time;
 
     QVector<QVector<QVector3D> > m_lights;
     QVector<QList<QVector<QVector3D > > > m_tiles;

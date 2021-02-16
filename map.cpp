@@ -188,11 +188,11 @@ Map::Map()
 
         QVector3D scale(1, 1, 1);
 
-        QList<int> xList = xGrid.toList();
-        QList<int> yList = yGrid.toList();
+        QList<int> xList = QList<int>(xGrid.begin(), xGrid.end()); //xGrid.toList();
+        QList<int> yList = QList<int>(yGrid.begin(), yGrid.end()); //yGrid.toList();
 
-        qSort(xList);
-        qSort(yList);
+        std::sort(xList.begin(), xList.end());
+        std::sort(yList.begin(), yList.end());
 
         for (QList<int>::const_iterator yit = yList.constBegin(); (yit + 1) != yList.constEnd(); ++yit) {
             for (QList<int>::const_iterator xit = xList.constBegin(); (xit + 1) != xList.constEnd(); ++xit) {

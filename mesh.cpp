@@ -127,9 +127,9 @@ Mesh::Edge *Mesh::Allocator::operator()(const Point &a, const Point &b, Face *fa
     }
 
     va->m_faces << face;
-    va->m_faceList = va->m_faces.toList();
+    va->m_faceList = FaceList(va->m_faces.begin(), va->m_faces.end());//va->m_faces.toList();
     vb->m_faces << face;
-    vb->m_faceList = vb->m_faces.toList();
+    vb->m_faceList = FaceList(vb->m_faces.begin(), vb->m_faces.end()); //vb->m_faces.toList();
 
     return edge;
 }

@@ -24,7 +24,7 @@
 #define SURFACEITEM_H
 
 #include <QImage>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QVector>
 #include <QVector2D>
 #include <QVector3D>
@@ -98,11 +98,11 @@ private:
     static uint m_numLightsUniform;
     static uint m_focusColorUniform;
 
-    uint m_textureId;
+    QOpenGLTexture *m_texture = nullptr;
     QRect m_dirty;
     QSize m_textureSize;
 
-    QTime m_time;
+    QElapsedTimer m_time;
     qreal m_height;
     bool m_focus;
     bool m_mipmap;

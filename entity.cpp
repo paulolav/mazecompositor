@@ -117,10 +117,10 @@ void Entity::render(const Map &map, const Camera &camera) const
     qreal ty1 = (m_tileHeight * (index / m_tileMod) + 1) * dy;
     qreal ty2 = ty1 + (m_tileHeight - 2) * dy;
 
-    QVector2D ta(tx2, ty2);
-    QVector2D tb(tx2, ty1);
-    QVector2D tc(tx1, ty1);
-    QVector2D td(tx1, ty2);
+    QVector3D ta(tx2, ty2, 0);
+    QVector3D tb(tx2, ty1, 0);
+    QVector3D tc(tx1, ty1, 0);
+    QVector3D td(tx1, ty2, 0);
 
     QVector<QVector3D> vertexBuffer;
     vertexBuffer << va << vb << vd << vd << vb << vc;

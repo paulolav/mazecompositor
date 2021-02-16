@@ -28,7 +28,7 @@
 #include <QOpenGLShaderProgram>
 #include <QPair>
 #include <QPolygonF>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QTouchEvent>
 #include <QWindow>
 #include <QVector>
@@ -201,7 +201,7 @@ private:
     bool m_jumping;
     qreal m_jumpVelocity;
 
-    QTime m_time;
+    QElapsedTimer m_time;
 
     typedef QHash<QWaylandSurface *, SurfaceItem *> SurfaceHash;
     SurfaceHash m_surfaces;
@@ -210,7 +210,7 @@ private:
     QList<SurfaceItem *> m_dockedSurfaces;
 
     Map m_map;
-    QWaylandInputDevice *m_input;
+    QWaylandSeat *m_input;
     SurfaceItem *m_focus;
     QVector2D m_resizeGrip;
     QPolygonF m_portalPoly;

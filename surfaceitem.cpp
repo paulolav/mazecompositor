@@ -30,6 +30,7 @@
 #include <QGuiApplication>
 #include <QPainter>
 #include <QOpenGLPaintDevice>
+#include <QOpenGLTexture>
 #include <QScreen>
 
 QOpenGLShaderProgram *SurfaceItem::m_program = 0;
@@ -47,7 +48,6 @@ uint SurfaceItem::m_numLightsUniform = 0;
 SurfaceItem::SurfaceItem(QWaylandSurface *surface)
     : m_depthOffset(0)
     , m_opacity(0.55)
-    , m_textureId(0)
     , m_height(maxHeight() * 0.99)
     , m_focus(false)
     , m_mipmap(true)
@@ -55,10 +55,10 @@ SurfaceItem::SurfaceItem(QWaylandSurface *surface)
     setSurface(surface);
     m_time.start();
     connect(surface, &QWaylandSurface::damaged, this, &SurfaceItem::surfaceDamaged);
-    connect(surface, &QWaylandSurface::sizeChanged, this, &SurfaceItem::sizeChanged);
+    connect(surface, &QWaylandSurface::destinationSizeChanged, this, &SurfaceItem::sizeChanged);
     //m_dirty = QRect(QPoint(), surface->size());
 
-    qDebug() << "surface size:" << surface->size();
+    qDebug() << "surface size:" << surface->destinationSize();
     m_opacityAnimation = new QPropertyAnimation(this, "opacity");
     m_opacityAnimation->setDuration(400);
     sizeChanged();
@@ -66,8 +66,6 @@ SurfaceItem::SurfaceItem(QWaylandSurface *surface)
 
 SurfaceItem::~SurfaceItem()
 {
-    if (!m_textureSize.isNull())
-        glDeleteTextures(1, &m_textureId);
 }
 
 void SurfaceItem::setOpacity(qreal op)
@@ -169,7 +167,7 @@ qreal SurfaceItem::height() const
 
 void SurfaceItem::sizeChanged()
 {
-    setHeight(0.8 * surface()->size().height() / qreal(QGuiApplication::primaryScreen()->size().height()));
+    setHeight(0.8 * surface()->destinationSize().height() / qreal(QGuiApplication::primaryScreen()->size().height()));
 }
 
 qreal SurfaceItem::maxHeight() const
@@ -179,7 +177,7 @@ qreal SurfaceItem::maxHeight() const
 
 QVector<QVector3D> SurfaceItem::vertices() const
 {
-    QSize size = surface()->size();
+    QSize size = surface()->destinationSize();
 
     qreal w = (m_height * size.width()) / size.height();
     qreal h = m_height;
@@ -211,17 +209,10 @@ QVector<QVector3D> SurfaceItem::vertices() const
 
 uint SurfaceItem::textureId()
 {
-    if (advance()) {
-        if (m_textureId)
-            glDeleteTextures(1, &m_textureId);
+    if (advance())
+        m_texture = currentBuffer().toOpenGLTexture();
 
-        glGenTextures(1, &m_textureId);
-        glBindTexture(GL_TEXTURE_2D, m_textureId);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        currentBuffer().bindToTexture();
-    }
-
-    return m_textureId;
+    return m_texture ? m_texture->textureId() : 0;
 }
 
 void SurfaceItem::surfaceDamaged(const QRegion &/*rect*/)
@@ -231,7 +222,7 @@ void SurfaceItem::surfaceDamaged(const QRegion &/*rect*/)
 
 QSize SurfaceItem::size() const
 {
-    return surface()->size();
+    return surface()->destinationSize();
 }
 
 void SurfaceItem::render(const Map &map, const Camera &camera)
@@ -246,12 +237,12 @@ void SurfaceItem::render(const Map &map, const Camera &camera)
     m_program->bind();
     m_program->setUniformValue(m_matrixUniform, camera.viewProjectionMatrix());
 
-    QSize size = surface()->size();
+    QSize size = surface()->destinationSize();
     m_program->setUniformValue(m_pixelSizeUniform, 5. / size.width(), 5. / size.height());
     m_program->setUniformValue(m_eyeUniform, camera.viewPos());
     m_program->setUniformValue(m_focusColorUniform, GLfloat(m_opacity));
-    m_program->setUniformValueArray(m_lightsUniform, map.lights(zone).constData(), map.lights(zone).size());
-    m_program->setUniformValue(m_numLightsUniform, map.lights(zone).size());
+    m_program->setUniformValueArray(m_lightsUniform, map.lights(zone).constData(), uint(map.lights(zone).size()));
+    m_program->setUniformValue(m_numLightsUniform, uint(map.lights(zone).size()));
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);

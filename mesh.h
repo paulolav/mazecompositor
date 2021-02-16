@@ -60,6 +60,8 @@ private:
     class Allocator;
     class Edge;
     class Face;
+    typedef QSet<Face *> FaceSet;
+    typedef QList< Face *> FaceList;
 
     class Vertex
     {
